@@ -1,0 +1,231 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{empheq}
+\usepackage{bm}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\newcommand{\chieff}{\chi_{\mathrm{eff}}}
+\newcommand{\Mc}{\mathcal{M}}
+\newcommand{\Mtot}{M_{\mathrm{tot}}}
+\newcommand{\Fisher}{\bm{F}}
+\newcommand{\Cov}{\bm{C}}
+\newcommand{\vth}{\bm{\theta}}
+\newcommand{\diag}{\mathrm{diag}}
+\newcommand{\sgn}{\mathrm{sgn}}
+
+\title{Optimally Measured Intrinsic Parameters of Gravitational-Wave Sources:\\
+Generalisations of $\chi_{\mathrm{eff}}$ and Chirp Mass}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We determine the linear combinations of a compact-binary's intrinsic parameters
+that are \emph{best measured} by a gravitational-wave detector network, as
+smooth functions of the true source parameters. Working in the Fisher
+information approximation, we marginalise over all other parameters, whiten the
+resulting covariance so that parameters of different dimension are comparable,
+and diagonalise. The eigenvector of smallest variance defines the best-measured
+combination. For aligned spins this combination reproduces the effective spin
+$\chieff$ to leading order and we provide a closed-form generalisation. For the
+masses, expressed in $(\log m_1,\log m_2)$, the best-measured combination
+smoothly interpolates between the chirp mass at low total mass and the total
+mass at high total mass.
+\end{abstract}
+
+\section{Setup and conventions}
+
+We consider a quasi-circular, aligned-spin compact binary. The frequency-domain
+waveform $h(f;\vth)$ depends on the parameter vector
+\begin{equation}
+  \vth = \bigl(\Mc,\,\eta,\,d_L,\,\theta,\,\phi,\,\iota,\,\psi,\,t_c,\,\phi_c,\,
+  \chi_{1z},\,\chi_{2z}\bigr),
+\end{equation}
+with detector-frame chirp mass $\Mc$, symmetric mass ratio
+$\eta=m_1 m_2/(m_1+m_2)^2$, luminosity distance $d_L$, sky position
+$(\theta,\phi)$, inclination $\iota$, polarisation $\psi$, coalescence time and
+phase $(t_c,\phi_c)$, and the dimensionless aligned spin components
+$\chi_{1z},\chi_{2z}$. Source-frame masses are redshifted to the detector frame,
+$m_i^{\rm det}=(1+z)\,m_i^{\rm src}$, and the redshift fixes $d_L$ through a
+fiducial cosmology. The masses can equivalently be parametrised by
+$(m_1,m_2)$ or $(\log m_1,\log m_2)$; we use the last of these for the mass
+study (Sec.~\ref{sec:mass}).
+
+\paragraph{Fisher matrix.}
+For a network of detectors with one-sided noise PSDs $S_n^{(d)}(f)$, the Fisher
+information matrix is
+\begin{equation}
+  F_{ij} = \sum_d \left( \frac{\partial h}{\partial \theta_i}\,\Big|\,
+  \frac{\partial h}{\partial \theta_j} \right)_d,
+  \qquad
+  (a\,|\,b)_d = 4\,\mathrm{Re}\!\int_{f_{\min}}^{f_{\max}}
+  \frac{a^*(f)\,b(f)}{S_n^{(d)}(f)}\,df .
+  \label{eq:fisher}
+\end{equation}
+The waveform derivatives are evaluated by automatic differentiation
+(\texttt{gwfast}/JAX), giving smooth, low-noise gradients --- essential for the
+eigenvectors to vary smoothly with $\vth$. In the large-SNR (Gaussian-linear)
+limit the parameter covariance is $\Cov=\Fisher^{-1}$.
+
+\section{Best-measured directions}
+\label{sec:method}
+
+Let $\vth_S \subset \vth$ be an intrinsic sub-space of interest (the spins, or
+the masses). Marginalising over all other parameters under the Gaussian
+approximation amounts to taking the corresponding sub-block of the full
+covariance,
+\begin{equation}
+  \Cov_S = \bigl[\Fisher^{-1}\bigr]_{S}.
+  \label{eq:marg}
+\end{equation}
+A linear combination $p = \bm{a}^{\!\top}\vth_S$ has variance
+$\sigma_p^2 = \bm{a}^{\!\top}\Cov_S\,\bm{a}$. The best-measured combination
+minimises this variance, so it is the eigenvector of $\Cov_S$ with the
+\emph{smallest} eigenvalue.
+
+\paragraph{Whitening.}
+Because the parameters carry different units and natural scales (e.g.\ $\Mc$ vs.\
+$\eta$), the raw eigenproblem is scale-dependent. We whiten by the marginal
+standard deviations $s_i=\sqrt{(\Cov_S)_{ii}}$, i.e.\ work in the dimensionless
+variables $\bm{u}=\bm{D}^{-1}\vth_S$ with $\bm{D}=\diag(s_i)$. The whitened
+covariance is the correlation matrix
+\begin{equation}
+  \Cov_S^{\,w} = \bm{D}^{-1}\Cov_S\,\bm{D}^{-1},
+\end{equation}
+which we symmetrise and diagonalise,
+$\Cov_S^{\,w}\,\bm{b}_j = \lambda_j\,\bm{b}_j$, with
+$\lambda_1\le\lambda_2\le\dots$ ordered ascending. The whitened eigenvectors
+$\bm{b}_j$ are orthonormal. The corresponding combination in the original
+parameters has coefficients
+\begin{equation}
+  \bm{a}_j = \bm{D}^{-1}\bm{b}_j \;=\; \bm{b}_j / \bm{s},
+  \label{eq:phys}
+\end{equation}
+which we normalise to unit Euclidean norm. The leading vector $\bm{a}_1$ is the
+best-measured combination; $\bm{a}_2$ is the next-best, and so on.
+
+\paragraph{Numerical reductions.}
+Three equivalent-in-principle reductions are implemented to assess numerical
+stability: (i) \emph{marginalise} --- invert the full Fisher, take the sub-block
+[Eq.~\eqref{eq:marg}]; (ii) \emph{whiten-then-marginalise} --- whiten the full
+Fisher by its diagonal before inversion; (iii) \emph{condition} --- fix all
+other parameters and invert the Fisher sub-block. We adopt (i) by default.
+
+\paragraph{Smoothness across the grid.}
+The sign and ordering of eigenvectors are arbitrary at each point. We track each
+mode along the parameter grid by matching the orthonormal whitened eigenvectors
+$\bm{b}_j$ between adjacent points (maximising overlap and fixing the sign for
+positive overlap), which is robust through eigenvalue crossings. Matching the
+non-orthonormal physical coefficients $\bm{a}_j$ would mis-assign near
+crossings.
+
+\section{Spin: generalisation of $\chieff$}
+\label{sec:spin}
+
+The effective aligned spin is
+\begin{equation}
+  \chieff = \frac{\chi_{1z}+q\,\chi_{2z}}{1+q},
+  \qquad q \equiv \frac{m_2}{m_1}\le 1,
+  \label{eq:chieff}
+\end{equation}
+i.e.\ the combination of $(\chi_{1z},\chi_{2z})$ with weight ratio
+$c_2/c_1 = q$. We compute the best-measured spin direction in the
+$(\chi_{1z},\chi_{2z})$ sub-space by the procedure of Sec.~\ref{sec:method} and
+report its weight ratio $c_2/c_1$.
+
+Numerically the best-measured direction tracks $\chieff$ closely but lies
+systematically slightly below it. A two-parameter fit (single LIGO at design
+sensitivity, \texttt{IMRPhenomD}; weak dependence on the other parameters) gives
+\begin{empheq}[box=\fbox]{equation}
+  \left(\frac{c_2}{c_1}\right)_{\rm best}
+  = q\Bigl[\,1 - 0.337\,(1-q) + 0.359\,(1-q)^2\,\Bigr],
+  \label{eq:spinfit}
+\end{empheq}
+with RMS residual $\approx 0.018$ and a maximum deviation from the $\chieff$
+prediction $c_2/c_1=q$ of $\approx 0.10$ near $q\sim0.5$. Equation
+\eqref{eq:spinfit} reduces to $\chieff$ at equal mass ($q\to1$) and stays within
+$\sim10\%$ of it across the range, quantifying the (modest) sense in which
+$\chieff$ is the optimally measured aligned-spin parameter.
+
+\section{Mass: chirp mass to total mass}
+\label{sec:mass}
+
+We study the masses in the basis $(\log m_1,\log m_2)$, in which the
+best-measured combination $w_1\log m_1 + w_2\log m_2$ is a power-law mass
+parameter $\propto m_1^{w_1} m_2^{w_2}$ and is scale-free. The Fisher matrix in
+this basis is obtained from the $(m_1,m_2)$ Fisher by the diagonal Jacobian
+$\Fisher_{\log} = \bm{J}\Fisher\bm{J}$ with $\bm{J}=\diag(m_1,m_2,1,\dots)$.
+
+Two reference combinations bracket the expected behaviour. The chirp mass
+\begin{equation}
+  \Mc = \frac{(m_1 m_2)^{3/5}}{(m_1+m_2)^{1/5}},
+  \qquad
+  \log\Mc = \tfrac{3}{5}\bigl(\log m_1+\log m_2\bigr)
+            - \tfrac{1}{5}\log(m_1+m_2),
+\end{equation}
+has gradient weights in $(\log m_1,\log m_2)$ with ratio
+\begin{equation}
+  \left(\frac{w_2}{w_1}\right)_{\!\Mc}
+  = \frac{\partial\log\Mc/\partial\log m_2}{\partial\log\Mc/\partial\log m_1}
+  = \frac{3+2q}{2+3q},
+  \label{eq:rchirp}
+\end{equation}
+while the total mass $\Mtot=m_1+m_2$ has
+\begin{equation}
+  \left(\frac{w_2}{w_1}\right)_{\!\Mtot}
+  = \frac{m_2/\Mtot}{m_1/\Mtot} = q .
+  \label{eq:rtot}
+\end{equation}
+At low total mass, where many inspiral cycles lie in band, the phase is
+dominated by $\Mc$ and the best-measured combination matches
+Eq.~\eqref{eq:rchirp}. At high total mass, where the signal is dominated by the
+merger--ringdown ($f\sim 1/\Mtot$), it approaches Eq.~\eqref{eq:rtot}. We model
+the crossover as
+\begin{empheq}[box=\fbox]{equation}
+  \left(\frac{w_2}{w_1}\right)_{\rm best}
+  = \bigl[1-s(\Mtot)\bigr]\,\frac{3+2q}{2+3q} + s(\Mtot)\,q,
+  \qquad
+  s(\Mtot)=\frac{1}{1+\bigl(\Mtot/\Mtot^{\star}\bigr)^{-k}},
+  \label{eq:massfit}
+\end{empheq}
+a sigmoid in $\log_{10}\Mtot$ with transition mass $\Mtot^{\star}$ and sharpness
+$k$. The single-detector design fit gives $\Mtot^{\star}\sim 1.5$--$2.5\times
+10^{2}\,M_\odot$ for the transition.
+
+\paragraph{Caveats.}
+Equation~\eqref{eq:massfit} captures the chirp-to-total trend but is not yet a
+high-fidelity fit. The data show (i) a non-monotonic \emph{overshoot} near
+$\Mtot\sim100$--$130\,M_\odot$, where $w_2/w_1$ rises above the chirp value
+before falling toward the total-mass value --- a real feature the simple sigmoid
+cannot represent; and (ii) ill-conditioning at equal mass ($q\to1$), where the
+two $(\log m_1,\log m_2)$ eigenvalues become near-degenerate and the
+best-measured mode can spuriously flip to the antisymmetric direction
+$w_2/w_1\to-1$ (the poorly measured mass-ratio direction). A richer functional
+form and explicit regularisation of the $q=1$ degeneracy are required for a
+quantitative mass formula; the qualitative chirp$\to$total transition is robust.
+
+\section{Summary}
+
+The best-measured intrinsic parameters, defined as the smallest-variance
+eigenvectors of the marginalised, whitened Fisher covariance, generalise the
+familiar phenomenological combinations:
+\begin{itemize}
+  \item \textbf{Spin:} a smooth, $\sim10\%$ correction to $\chieff$,
+  Eq.~\eqref{eq:spinfit}, reducing to $\chieff$ at equal mass.
+  \item \textbf{Mass:} a power-law mass parameter that interpolates between
+  chirp mass [Eq.~\eqref{eq:rchirp}] and total mass [Eq.~\eqref{eq:rtot}] across
+  a transition near $\Mtot^{\star}\sim10^2\,M_\odot$, Eq.~\eqref{eq:massfit}.
+\end{itemize}
+These are derived for aligned spins with the \texttt{IMRPhenomD} waveform and a
+single LIGO design-sensitivity detector; the framework is configurable for
+arbitrary detector networks. Precessing spins (and the corresponding
+generalisation of $\chi_p$) require a precessing waveform model and are left to
+future work.
+
+\end{document}
