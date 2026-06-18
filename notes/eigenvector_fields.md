@@ -282,6 +282,30 @@ sits slightly below $\chi_{\rm eff}$ — a genuine, smooth generalization.
 interpolating from the chirp-mass value $(3+2q)/(2+3q)$ at low mass toward the
 total-mass value $q$ at high mass.
 
+### Mass: the joint $(M_{\rm tot}, q)$ structure
+
+![mass joint map](figs/mass_joint.png)
+
+The best-measured log-mass weight ratio over the whole $(M_{\rm tot}, q)$ plane
+(`scripts/mass_grid2d.py`). Three regimes are visible: a **chirp plateau** at low
+total mass, an **overshoot ridge** at $M_{\rm tot}\sim100$–$140\,M_\odot$ where
+the ratio rises *above* the chirp value (middle panel, red), and a drop to the
+**total-mass** value at high mass. Two clean structural facts fall out:
+
+- The chirp$\to$total crossover (cyan 0.5 contour, right panel) is at
+  $M_{\rm tot}\approx200$–$250\,M_\odot$ and **nearly independent of $q$** — it is
+  set by where merger/ringdown enters the detector band, a function of total mass
+  alone.
+- The overshoot is a **coherent ridge, strongest at small $q$** (unequal masses),
+  vanishing as $q\to1$ (where chirp $\approx$ total and there is nothing to
+  transition between — also the near-degenerate regime needing the SVD fallback).
+
+This is why the naive monotonic chirp$\to$total sigmoid fit poorly: the surface is
+a monotonic, $q$-independent transition *plus* a separable overshoot bump
+localized in $\log M_{\rm tot}$ and modulated by $(1-q)$. A faithful closed form is
+chirp$\cdot(1-s)$ + total$\cdot s$ + bump, with $s$ a sigmoid in $M_{\rm tot}$ and
+the bump a localized (e.g. Gaussian-in-$\log M_{\rm tot}$) term scaled by $(1-q)$.
+
 ### Precessing spin: the measurability spectrum
 
 ![precessing spectrum](figs/prec_spectrum.png)
