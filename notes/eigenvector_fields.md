@@ -327,6 +327,31 @@ slightly asymmetric (rises gently, falls sharply into the transition) rather tha
 the symmetric Gaussian assumed here — the obvious next refinement (skewed bump or
 a stronger-than-linear $q$ dependence).
 
+### Symbolic regression on the mass surface (PySR)
+
+As a check on the hand-built form we ran PySR (`scripts/symbolic_mass.py`) on the
+same grid, from *raw* features $(q, x{=}\log_{10}M_{\rm tot})$ with only
+$\{+,-,\times,\div,\exp,\tanh,\text{square}\}$ and no chirp/total prior. It
+independently recovers the **transition skeleton** — its best expression is
+
+$$\frac{w_2}{w_1} \approx \frac{x}{2.40} + \tanh\!\Big(\tanh\!\big(\tanh\big[(-0.287 + 0.672/x)\,/\,(q^2/x^2)\big]\big)\Big),$$
+
+a linear-in-$\log M_{\rm tot}$ trend plus a $\tanh$ transition with $q$ entering
+through division — but it does **not** discover the localized overshoot bump at
+complexity $\le 28$, reaching RMS $\approx0.09$ versus $0.03$ for the
+physics-informed bump model.
+
+![mass PySR](figs/mass_pysr.png)
+
+The residual makes the gap explicit: a stripe of error sits exactly on the
+overshoot ridge (the bump is missed) and the chirp plateau is mis-levelled. The
+lesson is the useful one: the chirp/total rational structure and the *localized*
+bump are hard for unguided symbolic regression to invent, so a physics prior wins.
+The natural follow-up is **feature-engineered SR** — give PySR the known building
+blocks ($r_{\rm chirp}(q)=(3+2q)/(2+3q)$, $r_{\rm total}=q$, and $x$) as inputs so
+it only has to discover the residual bump on top; that should match or beat the
+hand fit and may reveal a cleaner closed form for the overshoot.
+
 ### Precessing spin: the measurability spectrum
 
 ![precessing spectrum](figs/prec_spectrum.png)
