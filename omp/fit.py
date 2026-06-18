@@ -116,3 +116,72 @@ def fit_mass(q, Mtot, ratio) -> MassFit:
     pred = _mass_model((q, Mtot), logM0, k)
     rms = float(np.sqrt(np.mean((pred - ratio) ** 2)))
     return MassFit(logM0=float(logM0), k=float(k), rms=rms)
+
+
+# --- mass fit, 2D (transition + overshoot bump) ----------------------------
+#
+# The (Mtot, q) grid (scripts/mass_grid2d.py) shows the surface is a monotonic,
+# q-independent chirp->total transition *plus* an overshoot ridge localised in
+# log10(Mtot) and growing with (1-q).  We model exactly that:
+#
+#   w2/w1 = (1-s) r_chirp(q) + s r_total(q)  +  A (1-q) exp[-((x-mu)/w)^2 / 2]
+#
+# with x = log10(Mtot), s = sigmoid(k (x - logM0)).  The first part is the
+# transition (its midpoint logM0 is the ~q-independent transition mass); the
+# second is the overshoot bump (amplitude A at q->0, centre mu, width w).
+
+def _mass_model_2d(X, logM0, k, A, mu, w):
+    q, Mtot = X
+    x = np.log10(Mtot)
+    s = _sigmoid(k * (x - logM0))
+    base = (1.0 - s) * r_chirp_logmass(q) + s * r_total_logmass(q)
+    bump = A * (1.0 - q) * np.exp(-0.5 * ((x - mu) / w) ** 2)
+    return base + bump
+
+
+@dataclass
+class MassFit2D:
+    logM0: float           # log10 transition total mass [Msun]
+    k: float               # transition sharpness
+    A: float               # overshoot bump amplitude (at q -> 0)
+    mu: float              # log10 bump-centre total mass [Msun]
+    w: float               # bump width in log10(Mtot)
+    rms: float
+
+    @property
+    def transition_mass(self) -> float:
+        return 10.0 ** self.logM0
+
+    @property
+    def bump_mass(self) -> float:
+        return 10.0 ** self.mu
+
+    def predict(self, q, Mtot):
+        return _mass_model_2d((np.asarray(q, float), np.asarray(Mtot, float)),
+                              self.logM0, self.k, self.A, self.mu, self.w)
+
+    def formula(self) -> str:
+        return (
+            "w2/w1 = (1-s) r_chirp(q) + s r_total(q) + A (1-q) "
+            f"exp[-((x-mu)/w)^2/2],  x=log10 Mtot, "
+            f"s=sigmoid({self.k:.2f}(x-{self.logM0:.3f}));\n"
+            f"    transition Mtot ~ {self.transition_mass:.0f} Msun, "
+            f"bump: A={self.A:.3f} at Mtot ~ {self.bump_mass:.0f} Msun, "
+            f"width(log10)={self.w:.3f}"
+        )
+
+
+def fit_mass_2d(q, Mtot, ratio) -> MassFit2D:
+    q = np.asarray(q, float).ravel()
+    Mtot = np.asarray(Mtot, float).ravel()
+    ratio = np.asarray(ratio, float).ravel()
+    p0 = [np.log10(225.0), 5.0, 0.6, np.log10(120.0), 0.15]
+    bounds = ([1.5, 0.5, 0.0, 1.5, 0.03],
+              [3.0, 50.0, 5.0, 3.0, 0.8])
+    (logM0, k, A, mu, w), _ = curve_fit(
+        _mass_model_2d, (q, Mtot), ratio, p0=p0, bounds=bounds, maxfev=40000,
+    )
+    pred = _mass_model_2d((q, Mtot), logM0, k, A, mu, w)
+    rms = float(np.sqrt(np.mean((pred - ratio) ** 2)))
+    return MassFit2D(logM0=float(logM0), k=float(k), A=float(A),
+                     mu=float(mu), w=float(w), rms=rms)

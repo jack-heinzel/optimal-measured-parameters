@@ -36,16 +36,25 @@ def main(nq=22, nM=26, qmin=0.25, qmax=0.985, Mmin=15.0, Mmax=500.0,
     q_flat, M_flat = Q.ravel(), M.ravel()
     m1_flat = M_flat / (1.0 + q_flat)
 
-    src = SourceParams(m1=m1_flat, q=q_flat, z=z, chi1z=0.0, chi2z=0.0)
-    ws = FisherWorkspace(waveform="IMRPhenomD", mass_coords="logm1logm2")
-    F = ws.fisher(src, res=res, batch_size=26)
-
-    ratio = np.empty(q_flat.size)
-    for i in range(q_flat.size):
-        b = analyze_subspace(F[..., i:i+1], ws.par_order, ["logm1", "logm2"],
-                             method="marginalize", sign_ref=[1.0, 1.0])[0].best
-        ratio[i] = b[1] / b[0]
-    R = ratio.reshape(Q.shape)
+    cache = f"{OUT}/mass_joint.npz"
+    if os.path.exists(cache):
+        d = np.load(cache)
+        Q, M, R = d["Q"], d["M"], d["R"]
+        qg, Mg = Q[:, 0], M[0, :]
+        print(f"loaded cached grid {R.shape} from {cache}")
+    else:
+        src = SourceParams(m1=m1_flat, q=q_flat, z=z, chi1z=0.0, chi2z=0.0)
+        ws = FisherWorkspace(waveform="IMRPhenomD", mass_coords="logm1logm2")
+        F = ws.fisher(src, res=res, batch_size=26)
+        ratio = np.empty(q_flat.size)
+        for i in range(q_flat.size):
+            b = analyze_subspace(F[..., i:i+1], ws.par_order,
+                                 ["logm1", "logm2"], method="marginalize",
+                                 sign_ref=[1.0, 1.0])[0].best
+            ratio[i] = b[1] / b[0]
+        R = ratio.reshape(Q.shape)
+        np.savez(cache, Q=Q, M=M, R=R)
+        print(f"saved grid -> {cache}")
 
     chirp = (3 + 2 * Q) / (2 + 3 * Q)                # q-only reference
     total = Q                                        # q-only reference
@@ -80,13 +89,41 @@ def main(nq=22, nM=26, qmin=0.25, qmax=0.985, Mmin=15.0, Mmax=500.0,
     fig.savefig(f"{OUT}/mass_joint.png", dpi=130)
     print("saved mass_joint.png")
 
+    # --- 2D closed-form fit (transition + overshoot bump) ------------------
+    from omp import fit as omf
+    fit1d = omf.fit_mass(Q.ravel(), M.ravel(), R.ravel())     # old monotonic
+    fit2d = omf.fit_mass_2d(Q, M, R)                          # new 2D model
+    model = fit2d.predict(Q, M)
+    print("\n=== MASS 2D FIT ===")
+    print(" ", fit2d.formula())
+    print(f"  fit RMS (2D bump model) = {fit2d.rms:.4e}")
+    print(f"  fit RMS (1D sigmoid)    = {fit1d.rms:.4e}   [for comparison]")
+
+    fig2, ax2 = plt.subplots(1, 3, figsize=(16, 4.6))
+    vmin, vmax = float(R.min()), float(R.max())
+    a = ax2[0].imshow(R, origin="lower", aspect="auto", extent=ext,
+                      cmap="viridis", vmin=vmin, vmax=vmax)
+    ax2[0].set_title(r"data  $w_2/w_1$"); fig2.colorbar(a, ax=ax2[0])
+    b = ax2[1].imshow(model, origin="lower", aspect="auto", extent=ext,
+                      cmap="viridis", vmin=vmin, vmax=vmax)
+    ax2[1].set_title(f"2D fit model (RMS={fit2d.rms:.3f})")
+    fig2.colorbar(b, ax=ax2[1])
+    c = ax2[2].imshow(R - model, origin="lower", aspect="auto", extent=ext,
+                      cmap="RdBu_r", vmin=-0.1, vmax=0.1)
+    ax2[2].set_title("residual (data $-$ fit)"); fig2.colorbar(c, ax=ax2[2])
+    for ax in ax2:
+        ax.set_xlabel(r"$\log_{10} M_{\rm tot}$ [$M_\odot$]")
+        ax.set_ylabel("mass ratio $q$")
+    fig2.tight_layout(); fig2.savefig(f"{OUT}/mass_fit2d.png", dpi=130)
+    print("saved mass_fit2d.png")
+
     # quick text slice through a few q
     print("\n w2/w1 at selected (q, Mtot):")
-    for qi in [0, nq // 2, nq - 1]:
+    for qi in [0, len(qg) // 2, len(qg) - 1]:
         print(f"  q={qg[qi]:.2f}: chirp={ (3+2*qg[qi])/(2+3*qg[qi]):.3f} "
               f"total={qg[qi]:.3f} | ratio @Mtot="
               + ", ".join(f"{Mg[mi]:.0f}:{R[qi,mi]:.3f}"
-                          for mi in [0, nM // 2, nM - 1]))
+                          for mi in [0, len(Mg) // 2, len(Mg) - 1]))
 
 
 if __name__ == "__main__":
