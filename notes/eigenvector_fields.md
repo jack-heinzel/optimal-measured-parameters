@@ -302,9 +302,30 @@ the ratio rises *above* the chirp value (middle panel, red), and a drop to the
 
 This is why the naive monotonic chirp$\to$total sigmoid fit poorly: the surface is
 a monotonic, $q$-independent transition *plus* a separable overshoot bump
-localized in $\log M_{\rm tot}$ and modulated by $(1-q)$. A faithful closed form is
-chirp$\cdot(1-s)$ + total$\cdot s$ + bump, with $s$ a sigmoid in $M_{\rm tot}$ and
-the bump a localized (e.g. Gaussian-in-$\log M_{\rm tot}$) term scaled by $(1-q)$.
+localized in $\log M_{\rm tot}$ and modulated by $(1-q)$.
+
+**The 2-D closed-form fit** (`omp.fit.fit_mass_2d`) encodes exactly that:
+
+$$
+\frac{w_2}{w_1} = (1-s)\,\frac{3+2q}{2+3q} + s\,q
+\;+\; A\,(1-q)\,e^{-\frac{1}{2}\left(\frac{x-\mu}{w}\right)^2},
+\qquad x=\log_{10}M_{\rm tot},\ \ s=\mathrm{sigmoid}\!\big(k(x-\log_{10}M_\star)\big),
+$$
+
+with fitted values $M_\star\approx216\,M_\odot$ (transition, $k\approx9.4$) and an
+overshoot bump of amplitude $A\approx0.94$ at $M_{\rm tot}\approx135\,M_\odot$,
+width $\approx0.12$ in $\log_{10}M_{\rm tot}$. This reaches **RMS $\approx0.030$**,
+versus $\approx0.12$ for the bump-less sigmoid on the same grid — a 4$\times$
+improvement, and the form is interpretable: a $q$-independent transition mass plus
+a $(1-q)$-scaled overshoot.
+
+![mass 2D fit](figs/mass_fit2d.png)
+
+Data, fitted model, and residual. The residual is small everywhere except a
+localized excess at the low-$q$ tip of the overshoot ridge, where the true bump is
+slightly asymmetric (rises gently, falls sharply into the transition) rather than
+the symmetric Gaussian assumed here — the obvious next refinement (skewed bump or
+a stronger-than-linear $q$ dependence).
 
 ### Precessing spin: the measurability spectrum
 

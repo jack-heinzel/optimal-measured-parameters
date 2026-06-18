@@ -64,7 +64,7 @@ Both of:
 
 - **Spin (done).** Best-measured spin direction is a smooth generalisation of chi_eff, slightly below it, with weak mass dependence (L1 design, IMRPhenomD):
   `c2/c1 = q*(1 - 0.337*(1-q) + 0.359*(1-q)^2)`, fit RMS ~0.018, max deviation from chi_eff ~0.10.
-- **Mass (partial).** Confirms chirp→total transition near Mtot ~ 150-250 Msun, but the plain chirp↔total sigmoid fits poorly (RMS ~0.43) for two reasons: (a) a **non-monotonic overshoot** around Mtot ~ 100-130 Msun (ratio rises above the chirp value before dropping to total) that needs a richer model; (b) **ill-conditioning at equal mass (q=1)** where the two log-mass eigenvalues are near-degenerate and the "best" mode can flip to the unphysical antisymmetric direction (spurious `w2/w1 = -1`). Needs regularisation/conditioning at the degeneracy and a better functional form.
+- **Mass (2D fit done).** The `(Mtot, q)` map (`scripts/mass_grid2d.py`, cached `notes/figs/mass_joint.npz`) shows the surface separates into a **q-independent chirp→total transition** (sigmoid in log Mtot, midpoint Mtot ~ 216 Msun) **plus a separable overshoot bump** (amplitude ~0.94·(1−q), centred Mtot ~ 135 Msun, width 0.12 in log10). `omp.fit.fit_mass_2d` fits this form: **RMS ~0.030** vs ~0.12 for the bump-less sigmoid (4× better). Residual concentrates at the low-q overshoot tip (true bump is slightly asymmetric → skew-bump is the next refinement). The old 1D `fit_mass` (RMS ~0.43 on the (q,m1) grid) is superseded. q=1 still near-degenerate (chirp≈total there; a few points need gwfast's SVD fallback) but harmless since there is no structure to fit at q→1.
 
 ## Open methodological questions (to revisit)
 
