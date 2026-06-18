@@ -32,6 +32,10 @@ PAR_ORDER = [
 SPIN_PARS = ["chi1z", "chi2z"]
 MASS_PARS = ["Mc", "eta"]
 
+# Full precessing spin sub-space (Cartesian components at f_ref).  chi_eff lives
+# in the z-components, chi_p in the in-plane (x, y) components.
+SPIN_PARS_PREC = ["s1x", "s1y", "s1z", "s2x", "s2y", "s2z"]
+
 
 def _cosmo():
     from astropy.cosmology import Planck18
@@ -75,8 +79,14 @@ class SourceParams:
     m1: np.ndarray            # source-frame primary mass [Msun]
     q: np.ndarray             # mass ratio m2/m1 in (0, 1]
     z: np.ndarray             # redshift
-    chi1z: np.ndarray         # aligned spin of body 1
-    chi2z: np.ndarray         # aligned spin of body 2
+    chi1z: np.ndarray         # aligned (z) spin of body 1 == s1z
+    chi2z: np.ndarray         # aligned (z) spin of body 2 == s2z
+    # In-plane spin components at f_ref (precession).  Default 0 -> aligned
+    # spin, so the gwfast/aligned path is unchanged.
+    s1x: np.ndarray = field(default_factory=lambda: np.array([0.0]))
+    s1y: np.ndarray = field(default_factory=lambda: np.array([0.0]))
+    s2x: np.ndarray = field(default_factory=lambda: np.array([0.0]))
+    s2y: np.ndarray = field(default_factory=lambda: np.array([0.0]))
     iota: np.ndarray = field(default_factory=lambda: np.array([np.pi / 3]))
     theta: np.ndarray = field(default_factory=lambda: np.array([np.pi / 3]))
     phi: np.ndarray = field(default_factory=lambda: np.array([1.0]))
@@ -94,6 +104,36 @@ class SourceParams:
             elif a.size != n:
                 raise ValueError(f"length mismatch for {k!r}: {a.size} vs {n}")
             setattr(self, k, a)
+
+    def spins_cartesian(self):
+        """Cartesian spin components ``(s1x, s1y, s1z, s2x, s2y, s2z)`` at f_ref.
+
+        The z-components are ``chi1z, chi2z``; in-plane default to zero (aligned).
+        """
+        return (self.s1x, self.s1y, self.chi1z,
+                self.s2x, self.s2y, self.chi2z)
+
+    @classmethod
+    def from_spherical(cls, m1, q, z, a1, a2, tilt1, tilt2,
+                       phi1=0.0, phi2=0.0, **kwargs):
+        """Build from physical spin spherical coords ``(a_i, tilt_i, phi_i)``.
+
+        ``a_i`` is the dimensionless spin magnitude, ``tilt_i`` the polar angle
+        from the orbital angular momentum L (so ``cos tilt`` sets the aligned
+        component), ``phi_i`` the in-plane azimuth -- the (a, cos tilt, phi)
+        parameterisation of CLAUDE.md.  Converts to Cartesian at f_ref:
+        ``s_z = a cos tilt``, ``s_x = a sin tilt cos phi``, ``s_y = a sin tilt sin phi``.
+        """
+        a1, a2 = np.asarray(a1, float), np.asarray(a2, float)
+        t1, t2 = np.asarray(tilt1, float), np.asarray(tilt2, float)
+        p1, p2 = np.asarray(phi1, float), np.asarray(phi2, float)
+        return cls(
+            m1=m1, q=q, z=z,
+            chi1z=a1 * np.cos(t1), chi2z=a2 * np.cos(t2),
+            s1x=a1 * np.sin(t1) * np.cos(p1), s1y=a1 * np.sin(t1) * np.sin(p1),
+            s2x=a2 * np.sin(t2) * np.cos(p2), s2y=a2 * np.sin(t2) * np.sin(p2),
+            **kwargs,
+        )
 
     def detector_component_masses(self):
         """Detector-frame component masses ``(m1_det, m2_det)`` [Msun].

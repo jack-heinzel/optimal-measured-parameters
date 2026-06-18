@@ -69,6 +69,70 @@ def whiten_then_marginalized_subcov(F, par_order, sub_pars, **cov_kwargs):
     return np.asarray(subcov), np.asarray(eps)
 
 
+def marginalized_subcov_schur(F, par_order, sub_pars):
+    """Marginalised sub-covariance via the Schur complement (stable).
+
+    The marginal covariance of the sub-space ``s`` is the sub-block of the full
+    inverse, which by the block-inverse identity equals
+
+        cov_s = (F_ss - F_sn F_nn^{-1} F_ns)^{-1},
+
+    i.e. the inverse of the *marginalised sub-Fisher* (Schur complement of the
+    nuisance block ``n``).  This never inverts the full matrix, only the
+    well-conditioned nuisance block ``F_nn`` and the small sub-block -- essential
+    for precessing waveforms, where the full Fisher spans ~20 orders of
+    magnitude (in-plane spins ~1e3-1e6x worse measured than aligned) and the
+    direct ``CovMatr`` inversion is numerically unstable.
+
+    Returns ``(subcov, eps)`` with ``subcov`` shape ``(k, k, Nev)``; ``eps`` is
+    the per-event Schur-complement symmetry residual (a stability diagnostic).
+    """
+    F = np.asarray(F)
+    npar, _, nev = F.shape
+    idx_s = [par_order.index(p) for p in sub_pars]
+    idx_n = [i for i in range(npar) if i not in idx_s]
+    k = len(idx_s)
+    subcov = np.empty((k, k, nev))
+    eps = np.empty(nev)
+    for i in range(nev):
+        Fi = F[..., i]
+        Fss = Fi[np.ix_(idx_s, idx_s)]
+        Fsn = Fi[np.ix_(idx_s, idx_n)]
+        Fnn = Fi[np.ix_(idx_n, idx_n)]
+        X = np.linalg.solve(Fnn, Fsn.T)          # F_nn^{-1} F_ns
+        Fbar = Fss - Fsn @ X                     # marginalised sub-Fisher
+        Fbar_sym = 0.5 * (Fbar + Fbar.T)
+        eps[i] = np.max(np.abs(Fbar - Fbar_sym)) / (np.max(np.abs(Fbar)) + 1e-300)
+        subcov[..., i] = np.linalg.inv(Fbar_sym)
+    return subcov, eps
+
+
+def marginalized_subfisher_schur(F, par_order, sub_pars):
+    """Marginalised sub-*Fisher* (Schur complement of the nuisance block).
+
+    Returns ``Fbar = F_ss - F_sn F_nn^{-1} F_ns`` with shape ``(k, k, Nev)``.
+    Its inverse is the marginal covariance, but for sloppy sub-spaces (precessing
+    in-plane spins) ``Fbar`` is the numerically robust object: eigendecompose it
+    directly (best-measured = largest-eigenvalue eigenvector) rather than
+    inverting into a near-singular covariance.
+    """
+    F = np.asarray(F)
+    npar, _, nev = F.shape
+    idx_s = [par_order.index(p) for p in sub_pars]
+    idx_n = [i for i in range(npar) if i not in idx_s]
+    k = len(idx_s)
+    fbar = np.empty((k, k, nev))
+    for i in range(nev):
+        Fi = F[..., i]
+        Fss = Fi[np.ix_(idx_s, idx_s)]
+        Fsn = Fi[np.ix_(idx_s, idx_n)]
+        Fnn = Fi[np.ix_(idx_n, idx_n)]
+        X = np.linalg.solve(Fnn, Fsn.T)
+        Fb = Fss - Fsn @ X
+        fbar[..., i] = 0.5 * (Fb + Fb.T)
+    return fbar
+
+
 def conditioned_subfisher(F, par_order, sub_pars):
     """Condition on all other parameters (gwfast ``fixParams``); return the
     Fisher sub-block ``(k, k, Nev)``.  Its inverse is the conditional, *not*
@@ -171,11 +235,55 @@ def eigen_from_cov(cov, sub_pars, whiten="subcov", fisher_diag=None,
     )
 
 
+def eigen_from_fisher(fisher, sub_pars, whiten="fisher_diag", sign_ref=None):
+    """Eigen-analysis of a (marginalised) Fisher sub-block.
+
+    The best-measured combination is the *largest*-eigenvalue eigenvector of the
+    Fisher (= smallest variance), the dual of :func:`eigen_from_cov`.  Whitening
+    by the Fisher diagonal (``1/sqrt(F_ii)``, the conditional sigma) is always
+    well-defined, so this is stable even when the covariance is non-PD (sloppy
+    in-plane spin directions under precession).
+
+    Returns an :class:`EigenResult` with eigenvectors ordered best-measured
+    first and ``variances`` = ``1/eigenvalue`` in whitened space.
+    """
+    F = np.asarray(fisher, dtype=float)
+    F = 0.5 * (F + F.T)
+    if whiten is None:
+        d = np.ones(F.shape[0])
+    elif whiten == "fisher_diag":
+        d = np.sqrt(np.abs(np.diag(F)))
+    else:
+        raise ValueError(f"unknown whiten mode {whiten!r} for eigen_from_fisher")
+    D_inv = np.diag(1.0 / d)
+    Fw = D_inv @ F @ D_inv                            # whitened Fisher
+    Fw = 0.5 * (Fw + Fw.T)
+    vals, vecs = np.linalg.eigh(Fw)                   # ascending eigenvalues
+    order = np.argsort(vals)[::-1]                    # largest first = best
+    vals, vecs = vals[order], vecs[:, order]
+    # A real Fisher is PSD; tiny/negative eigenvalues are numerical noise on
+    # unconstrained directions -> report infinite (unmeasured) variance.
+    tiny = np.finfo(float).eps * max(abs(vals[0]), 1.0)
+    variances = np.where(vals > tiny, 1.0 / np.where(vals > tiny, vals, 1.0),
+                         np.inf)
+    # whitened param is theta~_i = d_i theta_i, so a combination u.theta~ has
+    # physical coefficients a_i = u_i d_i.
+    coeffs = (vecs.T * d).T
+    coeffs = coeffs / np.linalg.norm(coeffs, axis=0, keepdims=True)
+    if sign_ref is not None:
+        sign_ref = np.asarray(sign_ref, dtype=float)
+        if np.dot(coeffs[:, 0], sign_ref) < 0:
+            coeffs[:, 0] *= -1
+            vecs[:, 0] *= -1
+    return EigenResult(list(sub_pars), variances, vecs, coeffs, d)
+
+
 # --------------------------------------------------------------------------
 # High-level driver
 # --------------------------------------------------------------------------
 
-_METHODS = {"marginalize", "whiten_then_marginalize", "condition"}
+_METHODS = {"marginalize", "marginalize_schur", "marginalize_fisher",
+            "whiten_then_marginalize", "condition"}
 
 
 def analyze_subspace(F, par_order, sub_pars, *, method="marginalize",
@@ -199,8 +307,18 @@ def analyze_subspace(F, par_order, sub_pars, *, method="marginalize",
                                           sign_ref=sign_ref))
         return results
 
+    if method == "marginalize_fisher":
+        # Eigendecompose the marginalised Fisher directly (stable for sloppy
+        # sub-spaces); whitening defaults to the Fisher diagonal.
+        fbar = marginalized_subfisher_schur(F, par_order, sub_pars)
+        fw = whiten if whiten in (None, "fisher_diag") else "fisher_diag"
+        return [eigen_from_fisher(fbar[..., i], sub_pars, whiten=fw,
+                                  sign_ref=sign_ref) for i in range(nev)]
+
     if method == "marginalize":
         subcov, _ = marginalized_subcov(F, par_order, sub_pars, **cov_kwargs)
+    elif method == "marginalize_schur":
+        subcov, _ = marginalized_subcov_schur(F, par_order, sub_pars)
     else:  # whiten_then_marginalize
         subcov, _ = whiten_then_marginalized_subcov(
             F, par_order, sub_pars, **cov_kwargs)
